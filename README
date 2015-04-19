@@ -1,0 +1,218 @@
+
+    pywise Version 1.0
+    
+    A Python module for doing multi-threaded pairwise calculations across sets
+    of collections of points in any-dimensional space.
+    
+    Copyright (C) 2015 Adam J. Marsden
+    
+    
+    Overview
+    ========
+    
+        pywise is a Python 2.7 module which provides bindings to libpairwise.
+    It allows a large set of pairwise calculations to be straightforwardly and
+    automatically distributed across any number of threads which run in
+    parallel.
+    
+        pywise was developed and tested on hosts running Ubuntu 14.04 and Linux
+    Mint 17, where it requires the python-dev and python-numpy packages to be
+    built. pairwise was developed using NumPy version 1.8.2; compatibility with
+    other versions is unknown.
+    
+        pywise was written for my own use in computational biology, and I
+    welcome any advice on how I might make it better. I release pywise under
+    the GNU General Public License Version 2 in hopes that it might be of use
+    to others.
+    
+    
+    Getting Started Quickly
+    =======================
+    
+        $ python setup.py build
+        $ sudo python setup.py install
+    
+    Then in Python,
+    
+        import pywise
+        import numpy
+        from random import random
+        
+        p = [[random() for i in xrange(3)] for i in xrange(10000)]
+        
+        dists = pywise.distances(points = p, threads = 10)
+        
+        c = numpy.random.rand(10000, 50, 3)
+        
+        rmsds = pywise.rmsds(collections = c, threads = 10)
+    
+    and to get the distance between points p[100] and p[-1], and the RMSD
+    between collections c[100] and c[-1],
+    
+        i = pairwise.index(10000, 100, -1)
+    
+        my_distance = d[i]
+        my_rmsd = c[i]
+    
+    
+    Installation
+    ============
+    
+        The pywise distribution contains a custom Python distutils script
+     setup.py that handles compilation and installation on the host in the
+     usual way. This script first attempts to build libpairwise, on which
+     pywise depends, using make. If libpairwise is builds successfully,
+     distutils will then attempt to build pywise, statically linking
+     libpairwise.a from the libpairwise directory.
+     
+        Note that for compilation to succeed the host must make available the
+    Python 2.7 and NumPy development headers. On hosts running Ubuntu and Linux
+    Mint (and probably most other Debian distributions too), first run,
+    
+        $ sudo apt-get install python-dev python-numpy
+    
+    to get these if you don't have them already.
+    
+        pywise can be built in-place using,
+        
+        $ python setup.py build_ext --inplace
+        
+    which produces a shared object file pywise.so in the distribution root. To
+    use pywise in Python scripts without permanently installing it on the host
+    simply copy pywise.so into the same directory as the Python script which
+    intends to use it and,
+    
+        import pywise
+    
+    as usual. Alternatively add the location of pywise.so to your PYTHONPATH
+    environment variable.
+    
+        If, on the other hand, you want to install pywise on the host
+    permanently (such that it will be available to all Python scripts) run,
+    
+        $ python setup.py build
+        $ sudo python setup.py install
+    
+    
+    Concepts
+    ========
+    
+        pywise works on sets of collections of points in any-dimensional space,
+    or on sets of points in any-dimensional space.
+    
+        A set of collections is represented by any triply-nested Python
+    sequence, where the first level is a sequence of collections, the second
+    level is a sequence of points (one sequence of points per collection), and
+    the third level is a sequence of coordinates (one sequence of coordinates
+    per point).
+        
+        collections = [COLLECTION_1], [COLLECTION_2], ..., [COLLECTION_A]
+        
+        [COLLECTION_A] = [POINT_1], [POINT_2], ..., [POINT_B]
+        
+        [POINT_B] = [COORDINATE_1], [COORDINATE_2], ..., [COORDINATE_C]
+    
+    [COORDINATE_C] is a number (integer or floating-point - all integers are
+    converted to floating-point numbers internally), and the number of points
+    per collection and the number of coordinates per point, B and C
+    respectively, are constant across all A collections.
+    
+        A set of points is represented by any similar doubly-nested Python
+    sequence, where the first level is a sequence of points, and the second
+    level is a sequence of coordinates (one sequence of coordinates per point).
+    
+        points = [POINT_1], [POINT_2], ..., [POINT_A]
+        
+        [POINT_A] = [COORDINATE_1], [COORDINATE_2], ..., [COORDINATE_B]
+        
+    [COORDINATE_B] is a number, and the number of coordinates per point, B, is
+    constant across all A points.
+    
+        In the above descriptions of sets of collections and points, the word
+    "sequence" means a Python object which supports the sequence protocol. In
+    practice this means that sets of collections and points can be Python
+    lists, tuples, generators, NumPy arrays, or many other types of iterable.
+    Coordinates can be any real number type.
+    
+        pywise calculation methods consider all possible pairwise combinations
+    of collections in a set of collections, or of points in a set of points,
+    and evaluate a function for each such pair of operands. pywise assumes that
+    the order of operands is not important. In this way pywise calculation
+    methods carry out a total of 0.5 * N * (N - 1) pairwise calculations per
+    call. These pairwise calculations are distributed fairly over any number of
+    threads which run in parallel.
+    
+        pywise calculation methods return the results of their pairwise
+    calculations in the form of a one-dimensional NumPy ndarray of doubles.
+    These results arrays are populated in the order,
+    
+        1_to_2, 1_to_3, 1_to_4, ..., 1_to_N
+                2_to_3, 2_to_4, ..., 2_to_N
+                        3_to_4, ..., 3_to_N
+                                ..., M_to_N
+    
+    where i_to_j is the result of the single pairwise calculation whose
+    operands are collections (or points) i and j in the input set of
+    collections (or points), N is the total number of collections (or points)
+    in the input set, and M = N - 1.
+    
+    
+    Methods
+    =======
+    
+        This version of pywise provides three methods.
+        
+        
+    (1.) distances()
+    
+        pywise.distances(points, threads = 1) -> numpy.ndarray
+        
+            distances() calculates all pairwise Euclidean distances over a set
+        of points as described above. The total number of pairwise calculations
+        to be done is distributed over a number of threads specified by the
+        argument with keyword "threads", and whose default value is 1.
+        
+            If the form of "points" is not as expected, or if it fails for any
+        other reason, distances() will raise an appropriate exception.
+    
+    
+    (2.) rmsds()
+    
+        pywise.rmsds(collections, threads = 1) -> numpy.ndarray
+        
+            rmsds() calculates all pairwise RMSDs over a set of collections as
+        described above. The total number of pairwise calculations to the be
+        done is distributed over a number of threads specified by the argument
+        with keyword "threads", and whose default value is 1.
+        
+            If the form of "collections" is not as expected, or if it fails for
+        any other reason, rmsds() will raise an appropriate exception.
+    
+    
+    (3.) index()
+    
+        pywise.index(n_collections, i_collection_a, i_collection_b) -> int
+        
+            index() returns the index into a results array from a pywise
+        calculation function which corresponds to the result of the single
+        pairwise calculation whose operands have indices i_collection_a and
+        i_collection_b in the input set of n_collections collections.
+        
+            Note that the returned index is valid for results arrays which come
+        both from pywise calculation functions which work on sets of
+        collections, as well as from those which work on sets of points.
+        Conceptually a set of points is equivalent to the special case of a set
+        of collections in which each collection has just one point.
+        
+            n_collections must be a greater-than-one integer, and
+        i_collection_a and i_collection_b must both index collections which
+        fall within the bounds of a set of size n_collections. Moreover
+        i_collection_a and i_collection_b must not both index the same
+        collection. i_collection_a and i_collection_b may be negative, in which
+        case they index backwards from the end of the input set of collections.
+        
+            If the caller supplies an invalid combination of n_collections,
+        i_collection_a and i_collection_b, index() will raise an appropriate
+        exception.
+    
+    

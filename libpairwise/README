@@ -1,0 +1,312 @@
+
+    libpairwise Version 1.0
+    
+    A C library for doing multi-threaded pairwise calculations across sets of
+    collections of points in any-dimensional space.
+    
+    Copyright (C) 2015 Adam J. Marsden
+    
+    
+    Overview
+    ========
+    
+        libpairwise is written in ANSI C. It allows a large set of pairwise
+    calculations to be straightforwardly and automatically distributed across
+    any number of threads which run in parallel.
+    
+        libpairwise works on sets of collections of points in any-dimensional
+    space. A set of collections is represented by a contiguous array of
+    doubles, which has form,
+    
+        collections = [COLLECTION_1], [COLLECTION_2], ..., [COLLECTION_A]
+    
+    with,
+    
+        [COLLECTION_A] = [POINT_1], [POINT_2], ..., [POINT_B]
+    
+    and,
+    
+        [POINT_B] = [COORDINATE_1], [COORDINATE_2], ..., [COORDINATE_C]
+    
+    where [COORDINATE_C] is a double, and the number of points per collection
+    and the number of coordinates per point, B and C respectively, are constant
+    across all A collections.
+    
+        libpairwise carries out calculations between all possible pairwise
+    combinations of a set of collections. libpairwise assumes that the order of
+    operands in each such pairwise calculation is unimportant. For a set of N
+    collections, this means a total of 0.5 * N * (N - 1) pairwise calculations
+    are to be done. Each one of these pairwise calculations is done exactly
+    once by only one of any number of threads requested by the caller.
+    
+        The results of all pairwise calculations are stored in a contiguous
+    array of doubles, the resposibility to allocate memory for which is the
+    caller's. libpairwise allocates no intermediary storage for calculation
+    results; each thread stores the results of its own subset of pairwise
+    calculations to the appropriate section of the user-supplied output array.
+    
+        libpairwise was written for my own use in computational biology, and I
+    welcome any advice on how I might make it better. I release libpairwise
+    under the GNU General Public License Version 2 in hopes that it might be of
+    use to others.
+    
+    
+    Getting Started Quickly
+    =======================
+    
+        libpairwise requires that the host provide the POSIX threads API, via
+    the pthread.h interface.
+    
+        Compilation rules for libpairwise as a static library are provided in 
+    the Makefile at the root of this distribution. On a host which provides
+    make,
+    
+      ~$ make
+    
+    will produce libpairwise.a, an indexed archive of object files suitable for
+    static linking.
+    
+        A program which calculates all the pairwise RMSDs across a set of
+    collections using eight threads might look like,
+    
+        #include "pairwise.h"
+        
+        int
+        main
+        (void)
+        {
+            
+            double* colls;
+            double* rmsds;
+            
+            int ret;
+            
+            // Some code to allocate memory for colls and rmsds.
+            // Some code to populate collections.
+            
+            // Let colls contain 200 collections.
+            // Let each collection have 50 points.
+            // Let each point have 4 coordinates.
+            
+            ret = pairwise_rmsds(200, 50, 3, collections, rmsds, 8);
+            
+            return ret;
+        
+        }
+    
+    and might be compiled from the root of the distribution with,
+    
+        ~$ cc -o example example.c -pthread -Iinclude libpairwise.a
+    
+    
+    The Public API
+    ==============
+    
+        All source code in this distribution is heavily commented so as to be
+    self-documenting. If you want to incorporate libpairwise into your own
+    projects I recommend reading the header files located in the "include"
+    directory of this distribution. Comments in these header files should
+    provide enough information to use libpairwise. Additional comments in the
+    source files located in the "source" directory of this distribution provide
+    further information on the implementation of libpairwise.
+    
+        This version of libpairwise provides three public functions.
+    
+    
+    (1.) pairwise_distances()
+            
+        int pairwise_distances(size_t n_points, size_t n_coordinates,
+                               double* a_points, double* a_distances,
+                               size_t n_threads);
+            
+            pairwise_distances() calculates all pairwise Euclidean distances
+        across an input set of points in any-dimensional space.
+    
+            In keeping with libpairwise convention, a set of points should be
+        regarded as the special case of a set of collections for which each
+        collection contains exactly one point. Phrasing the problem in this way
+        means that the same implementation can be used for doing pairwise
+        calculations across sets of points as can be used for doing pairwise
+        calculations across sets of collections of points.
+    
+            n_points is the number of points in a_points, and n_coordinates is
+        the number of coordinates per point. n_threads is the number of threads
+        across which to distribute the pairwise calculations to be done; these
+        threads will run in parallel.
+    
+            The caller is responsible for ensuring that a_points has the
+        correct form (as shown above), and that a_distances is large enough to
+        store all calculated distances.
+    
+            On success pairwise_distances() returns integer zero; on failure it
+        returns the appropriate libpairwise error code.
+        
+        Failure Return Codes:
+        
+            PAIRWISE_RETURN_ERROR_NTHREADS -> Supplied n_threads was zero.
+            
+            PAIRWISE_RETURN_MALLOC_FAIL -> A required memory allocation failed.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_EAGAIN -> A call to pthread_create()
+            failed because there were either insufficient system resources, or
+            a system limit on the number of threads would have been breached.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_EINVAL -> A call to pthread_create()
+            failed because the requested settings for the thread were invalid.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_EPERM -> A call to pthread_create()
+            failed because there were insufficient permissions to set the
+            requested scheduling policy or settings for the thread.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_UNKNOWN -> A call to
+            pthread_create() failed for an unknown reason.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_EDEADLK -> A call to pthread_join()
+            failed because a thread joining deadline was detected.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_EINVAL -> A call to pthread_join()
+            failed because the thread wasn't joinable, or another thread was
+            already waiting to join it.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_ESRCH -> A call to pthread_join()
+            failed because a thread with the supplied ID couldn't be found.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_UNKNOWN -> A call to pthread_join()
+            failed for an unknown reason.
+    
+    
+    (2.) pairwise_rmsds()
+            
+        int pairwise_rmsds(size_t n_collections, size_t n_points,
+                           size_t n_coordinates, double* a_collections,
+                           double* a_rmsds, size_t n_threads);
+            
+            pairwise_rmsds() calculates all pairwise RMSDs across an input set
+         of collections of points in any-dimensional space.
+    
+            n_collections is the number of collections in a_collections,
+        n_points is the number of points per collection, and n_coordinates is
+        the number of coordinates per point. n_threads is the number of threads
+        across which to distribute the pairwise calculations to be done; these
+        threads will run in parallel.
+    
+            The caller is responsible for ensuring that a_collections has the
+        correct form (as shown above), and that a_rmsds is large enough to
+        store all calculated RMSDs.
+    
+            On success pairwise_rmsds() returns integer zero; on failure it
+        returns the appropriate libpairwise error code.
+        
+        Failure Return Codes:
+        
+            PAIRWISE_RETURN_ERROR_NTHREADS -> Supplied n_threads was zero.
+            
+            PAIRWISE_RETURN_MALLOC_FAIL -> A required memory allocation failed.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_EAGAIN -> A call to pthread_create()
+            failed because there were either insufficient system resources, or
+            a system limit on the number of threads would have been breached.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_EINVAL -> A call to pthread_create()
+            failed because the requested settings for the thread were invalid.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_EPERM -> A call to pthread_create()
+            failed because there were insufficient permissions to set the
+            requested scheduling policy or settings for the thread.
+            
+            PAIRWISE_RETURN_PTHREAD_CREATE_UNKNOWN -> A call to
+            pthread_create() failed for an unknown reason.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_EDEADLK -> A call to pthread_join()
+            failed because a thread joining deadline was detected.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_EINVAL -> A call to pthread_join()
+            failed because the thread wasn't joinable, or another thread was
+            already waiting to join it.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_ESRCH -> A call to pthread_join()
+            failed because a thread with the supplied ID couldn't be found.
+            
+            PAIRWISE_RETURN_PTHREAD_JOIN_UNKNOWN -> A call to pthread_join()
+            failed for an unknown reason.
+    
+    
+    (3.) pairwise_index()
+    
+        int pairwise_index(size_t n_collections, size_t i_collection_a,
+                           size_t i_collection_b, size_t* i_result);
+            
+            pairwise_index() determines an index into a set of results produced
+        by either pairwise_distances() or pairwise_rmsds() which corresponds to
+        the particular result of the single pairwise calculation whose operands
+        were the two collections in the input set of collections with indices
+        i_collection_a and i_collection_b. n_collections is the total number of
+        collections in that input set, and i_result is a pointer to the size_t
+        in which the sought index will be stored.
+        
+            n_collections must be a greater-than-one integer, and
+        i_collection_a and i_collection_b may be any signed integers so long as
+        they both aren't indices of the same collection, and also so long as
+        they both are indices of collections which are within the bounds of a
+        set of n_collections collections. Negative integers for i_collection_a
+        and i_collection_b indicate a backwards index from the end of the input
+        set of collections.
+        
+            On success pairwise_index() returns integer zero; on failure it
+        returns the appropriate libpairwise error code.
+        
+        Failure Return Codes:
+        
+            PAIRWISE_RETURN_ERROR_NCOLLECTIONS -> Supplied n_collections was
+            less than two.
+            
+            PAIRWISE_RETURN_ERROR_ICOLLECTIONA -> Supplied i_collection_a was
+            out of bounds for a set of n_collections collections.
+            
+            PAIRWISE_RETURN_ERROR_ICOLLECTIONB -> Supplied i_collection_b was
+            out of bounds for a set of n_collections collections.
+            
+            PAIRWISE_RETURN_ERROR_ICOLLECTIONSAME -> Supplied i_collection_a
+            and i_collection_b were indices of the same collection.
+    
+    
+    Extending libpairwise
+    =====================
+    
+        libpairwise defines a number of structures and functions which are not
+    intended for general use outside of the library. These private definitions
+    have names beginning with a single underscore character, and are documented
+    with comments throughout the source code.
+    
+        One case in which a user might call a libpairwise private function
+    would be if they wanted to use libpairwise to parallelise their own
+    calculation function. To do this, the user could call _pairwise_launch().
+    
+    int _pairwise_launch(double (*f_calculation)(size_t n_points,
+                                                 size_t n_coordinates,
+                                                 double* collection_a,
+                                                 double* collection_b),
+                         
+                         size_t n_collections,
+                         size_t n_points,
+                         size_t n_coordinates,
+                         
+                         double* a_collections,
+                         double* a_results,
+                         
+                         size_t n_threads);
+    
+        All but the first of _pairwise_launch()'s arguments are identical to
+    their similarly-named counterparts in pairwise_rmsds() as described above.
+    (With one exception: a_results is an alias for pairwise_rmsds()'s a_rmsds.) 
+    
+        The first argument, f_calculation, is a pointer to a function which
+    describes a single calculation between a pair of collections. This function
+    will be applied to all pairwise combinations of collections in
+    a_collections, and the corresponding return values will be stored in
+    a_results. f_calculation should be defined as an inline function.
+    
+        The public functions pairwise_distances() and pairwise_rmsds()
+    described simply wrap _pairwise_launch() together with an appropriate
+    f_calculation.
+    
